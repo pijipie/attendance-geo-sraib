@@ -5,26 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Kehadiran Geofencing</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 16px; color: #1e293b; }
-    .card { background: #ffffff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); width: 100%; max-width: 400px; padding: 24px; border: 1px solid #e2e8f0; }
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: #f4f6f9; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .card { background: #ffffff; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.08); width: 100%; max-width: 420px; padding: 24px; border: 1px solid #e1e8ed; }
     .header { text-align: center; margin-bottom: 20px; }
     .logo-img { max-height: 75px; max-width: 180px; margin: 0 auto 12px auto; display: none; object-fit: contain; }
-    .header h1 { font-size: 20px; font-weight: 700; color: #0f172a; }
-    .header p { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .header h1 { font-size: 20px; font-weight: 700; color: #0f172a; margin: 0; }
+    .header p { font-size: 12px; color: #64748b; margin-top: 4px; }
     .form-group { margin-bottom: 16px; }
     label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #334155; }
-    input[type="text"], select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background-color: #ffffff; color: #0f172a; outline: none; }
+    input[type="text"], select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background-color: #ffffff; color: #1e293b; outline: none; transition: border-color 0.2s; }
     input[type="text"]:focus, select:focus { border-color: #2563eb; }
+    .staff-feedback { font-size: 12px; margin-top: 6px; font-weight: 600; min-height: 18px; }
     .gps-box { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 12px; color: #475569; margin-bottom: 16px; }
     .gps-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
     .gps-status { font-weight: 600; }
-    .gps-btn { color: #2563eb; font-weight: 600; background: none; border: none; text-decoration: underline; cursor: pointer; font-size: 11px; }
+    .gps-btn { color: #2563eb; font-weight: 600; background: none; border: none; text-decoration: underline; cursor: pointer; font-size: 11px; padding: 0; }
     .alert-box { padding: 12px; border-radius: 8px; font-size: 13px; font-weight: 500; margin-bottom: 16px; display: none; }
     .alert-success { background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
     .alert-error { background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-    .btn-submit { width: 100%; background: #059669; color: white; border: none; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; }
-    .btn-submit:active { opacity: 0.85; }
+    .btn-submit { width: 100%; background: #059669; color: white; border: none; padding: 14px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+    .btn-submit:hover { background: #047857; }
+    .btn-submit:disabled { background: #9ca3af; cursor: not-allowed; }
     .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.7); z-index: 999; justify-content: center; align-items: center; flex-direction: column; color: white; }
     .spinner { border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top: 4px solid white; width: 36px; height: 36px; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -32,214 +34,269 @@
 </head>
 <body>
 
+  <!-- Overlay Loader -->
   <div id="loadingOverlay" class="overlay">
     <div class="spinner"></div>
-    <div id="loadingText" style="font-size: 14px; font-weight: 600;">Memproses...</div>
+    <div id="loadingText" style="font-size: 14px; font-weight: 600;">Mendapatkan Lokasi...</div>
   </div>
 
   <div class="card">
     <div class="header">
-      <img id="appLogo" class="logo-img" alt="Logo Organization">
-      <h1 id="orgTitle">Sistem Kehadiran</h1>
-      <p>Pengesahan Geofencing GPS</p>
+      <img id="appLogo" class="logo-img" alt="Logo Organisasi">
+      <h1 id="appTitle">Sistem Kehadiran</h1>
+      <p id="appSubtitle">Sila sahkan maklumat anda untuk mendaftar</p>
     </div>
 
-    <div>
+    <!-- Kotak Mesej/Amaran -->
+    <div id="alertBox" class="alert-box"></div>
+
+    <form id="attendanceForm">
+      <!-- Input Staff ID -->
       <div class="form-group">
-        <label for="eventSelect">Pilih Acara / Program</label>
-        <select id="eventSelect">
+        <label for="staffId">ID Staf / No. Kad</label>
+        <input type="text" id="staffId" placeholder="Masukkan ID Staf (Contoh: MNHA)" required autocomplete="off">
+        <div id="staffFeedback" class="staff-feedback"></div>
+      </div>
+
+      <!-- Pilihan Acara -->
+      <div class="form-group">
+        <label for="eventId">Pilih Acara</label>
+        <select id="eventId" required>
           <option value="">-- Memuatkan Acara... --</option>
         </select>
       </div>
 
-      <div class="form-group">
-        <label for="staffIdInput">ID Staf / No. Kad</label>
-        <input type="text" id="staffIdInput" placeholder="Masukkan ID Staf (Contoh: MNHA)" autocomplete="off" onkeydown="handleKeyPress(event)">
-      </div>
-
+      <!-- Kotak Lokasi GPS -->
       <div class="gps-box">
         <div class="gps-row">
-          <span>Status GPS:</span>
-          <span id="gpsStatus" class="gps-status" style="color: #64748b;">Belum Diperoleh</span>
+          <span>Status GPS: <strong id="gpsStatusText" class="gps-status" style="color: #d97706;">Mencari lokasi...</strong></span>
+          <button type="button" class="gps-btn" onclick="getGPSLocation(true)">Muat Semula GPS</button>
         </div>
-        <div class="gps-row" style="margin-bottom: 0;">
-          <span id="gpsDetails" style="font-size: 11px; color: #94a3b8;">Lat: - | Lng: -</span>
-          <button type="button" onclick="getLocation(true)" class="gps-btn">Cari Lokasi</button>
+        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+          Koordinat: <span id="gpsCoords">-</span> | Ketepatan: <span id="gpsAccuracy">-</span>
         </div>
       </div>
 
-      <div id="alertBox" class="alert-box"></div>
-
-      <button type="button" id="submitBtn" onclick="submitAttendance()" class="btn-submit">
-        Sahkan Kehadiran
-      </button>
-    </div>
+      <!-- Butang Hantar -->
+      <button type="submit" id="submitBtn" class="btn-submit" disabled>Hantar Kehadiran</button>
+    </form>
   </div>
 
   <script>
-    // MASUKKAN PAUTAN WEB APP APPS SCRIPT ANDA DI SINI
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw0uYfCnyW5LjG-SGyFjIcM2ejDwNpISnRwOMXj8IP1kDCfifjp3xq4EPYIwK2nyEA_-Q/exec";
+    // GANTI URL INI DENGAN URL DEPLOYMENT GOOGLE APPS SCRIPT ANDA
+    const WEB_APP_URL = "MASUKKAN_URL_WEB_APP_APPS_SCRIPT_ANDA_DI_SINI";
 
+    let globalStaffList = [];
     let currentLat = null;
     let currentLng = null;
     let currentAccuracy = null;
+    let isStaffValid = false;
 
-    window.onload = function() {
-      loadInitialData();
-    };
-
-    function handleKeyPress(e) {
-      if (e.key === 'Enter' || e.keyCode === 13) {
-        e.preventDefault();
-        dismissKeyboard();
-        submitAttendance();
-      }
-    }
-
-    function dismissKeyboard() {
-      let input = document.getElementById('staffIdInput');
-      if (input) input.blur();
-    }
-
-    function showLoading(text) {
-      document.getElementById('loadingText').innerText = text || 'Memproses...';
-      document.getElementById('loadingOverlay').style.display = 'flex';
-    }
-
-    function hideLoading() {
-      document.getElementById('loadingOverlay').style.display = 'none';
-    }
-
-    function loadInitialData() {
+    // 1. Muat Data Awal (Config, Events, & Staff)
+    function fetchInitialData() {
+      showOverlay("Memuatkan Data Sistem...");
+      
       fetch(WEB_APP_URL)
-        .then(res => res.json())
+        .then(response => response.json())
         .then(data => {
+          hideOverlay();
+          
+          // A. Tetapan Config (Logo & Nama Organisasi)
           if (data.config) {
-            if (data.config.OrganizationName) {
-              document.getElementById('orgTitle').innerText = data.config.OrganizationName;
-            }
-            if (data.config.LogoURL) {
-              let logoEl = document.getElementById('appLogo');
-              logoEl.src = data.config.LogoURL;
+            if (data.config.Logo || data.config.LogoURL) {
+              const logoEl = document.getElementById('appLogo');
+              logoEl.src = data.config.Logo || data.config.LogoURL;
               logoEl.style.display = 'block';
             }
+            if (data.config.OrganizationName || data.config.OranizationName) {
+              document.getElementById('appTitle').innerText = data.config.OrganizationName || data.config.OranizationName;
+            }
           }
-          
-          let select = document.getElementById('eventSelect');
-          select.innerHTML = '<option value="">-- Pilih Acara --</option>';
+
+          // B. Muat Senarai Acara
+          const eventSelect = document.getElementById('eventId');
+          eventSelect.innerHTML = '<option value="">-- Pilih Acara --</option>';
           if (data.events && data.events.length > 0) {
-            data.events.forEach(function(ev) {
-              let opt = document.createElement('option');
-              opt.value = ev.eventId;
-              opt.textContent = ev.eventName + ' (' + ev.eventId + ')';
-              select.appendChild(opt);
+            data.events.forEach(evt => {
+              const opt = document.createElement('option');
+              opt.value = evt.eventId;
+              opt.textContent = evt.eventName;
+              eventSelect.appendChild(opt);
             });
+          } else {
+            eventSelect.innerHTML = '<option value="">Tiada Acara Aktif</option>';
           }
+
+          // C. Simpan Senarai Staf untuk Semakan Instant (Real-time)
+          if (data.staff) {
+            globalStaffList = data.staff;
+          }
+
+          // Semak GPS selepas data dimuatkan
+          getGPSLocation(false);
         })
         .catch(err => {
-          showAlert('Gagal memuatkan data acara', 'error');
+          hideOverlay();
+          showAlert("Gagal memuat data awal dari server. Sila muat semula halaman.", "error");
+          console.error(err);
         });
     }
 
-    function getLocation(showToast, callback) {
-      if (!navigator.geolocation) {
-        updateGpsUI('GPS Tidak Disokong', '#dc2626', '-');
-        if (callback) callback(false);
+    // 2. Semakan Real-Time ID Staf (0ms / Bebas Lag)
+    document.getElementById('staffId').addEventListener('input', function() {
+      const inputVal = this.value.trim().toLowerCase();
+      const feedbackEl = document.getElementById('staffFeedback');
+
+      if (!inputVal) {
+        feedbackEl.innerHTML = '';
+        isStaffValid = false;
+        checkFormValidity();
         return;
       }
 
-      updateGpsUI('Mendapatkan Lokasi...', '#d97706', 'Sila tunggu...');
+      // Cari padanan ID dalam senarai memori
+      const matchedStaff = globalStaffList.find(s => s.staffId.toLowerCase() === inputVal);
 
-      navigator.geolocation.getCurrentPosition(
-        function(pos) {
-          currentLat = pos.coords.latitude;
-          currentLng = pos.coords.longitude;
-          currentAccuracy = pos.coords.accuracy;
-
-          updateGpsUI(
-            'Lokasi Sah (±' + Math.round(currentAccuracy) + 'm)',
-            '#059669',
-            'Lat: ' + currentLat.toFixed(5) + ' | Lng: ' + currentLng.toFixed(5)
-          );
-
-          if (showToast) showAlert('Lokasi GPS berjaya diperolehi', 'success');
-          if (callback) callback(true);
-        },
-        function(err) {
-          updateGpsUI('Gagal Mengesan GPS', '#dc2626', 'Sila benarkan akses lokasi');
-          if (showToast) showAlert('Gagal mendapatkan lokasi GPS. Sila benarkan akses lokasi.', 'error');
-          if (callback) callback(false);
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      );
-    }
-
-    function updateGpsUI(statusText, colorHex, detailsText) {
-      let statusEl = document.getElementById('gpsStatus');
-      statusEl.innerText = statusText;
-      statusEl.style.color = colorHex;
-      document.getElementById('gpsDetails').innerText = detailsText;
-    }
-
-    function submitAttendance() {
-      dismissKeyboard();
-      let eventId = document.getElementById('eventSelect').value;
-      let staffId = document.getElementById('staffIdInput').value.trim();
-
-      if (!eventId) return showAlert('Sila pilih Acara / Program terlebih dahulu', 'error');
-      if (!staffId) return showAlert('Sila masukkan ID Staf anda', 'error');
-
-      showLoading('Mengesan Lokasi & Pengesahan...');
-
-      if (!currentLat || !currentLng) {
-        getLocation(false, function(success) {
-          if (success) {
-            sendDataToServer(staffId, eventId);
-          } else {
-            hideLoading();
-            showAlert('Sila benarkan akses lokasi (GPS) pada telefon anda.', 'error');
-          }
-        });
+      if (matchedStaff) {
+        feedbackEl.style.color = '#059669'; // Hijau
+        feedbackEl.innerHTML = '✓ Disahkan: <strong>' + matchedStaff.name + '</strong>';
+        isStaffValid = true;
       } else {
-        sendDataToServer(staffId, eventId);
+        feedbackEl.style.color = '#dc3545'; // Merah
+        feedbackEl.innerHTML = '✕ ID Staf tidak wujud dalam rekod!';
+        isStaffValid = false;
+      }
+
+      checkFormValidity();
+    });
+
+    // 3. Pengesanan Lokasi GPS
+    function getGPSLocation(isManual) {
+      const statusText = document.getElementById('gpsStatusText');
+      const coordsText = document.getElementById('gpsCoords');
+      const accuracyText = document.getElementById('gpsAccuracy');
+
+      statusText.style.color = '#d97706';
+      statusText.innerText = 'Mencari lokasi...';
+
+      if (isManual) showOverlay("Mengemaskini Lokasi GPS...");
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            if (isManual) hideOverlay();
+            currentLat = position.coords.latitude;
+            currentLng = position.coords.longitude;
+            currentAccuracy = position.coords.accuracy;
+
+            statusText.style.color = '#059669';
+            statusText.innerText = 'Lokasi Dikesan';
+            coordsText.innerText = currentLat.toFixed(5) + ', ' + currentLng.toFixed(5);
+            accuracyText.innerText = '±' + Math.round(currentAccuracy) + 'm';
+
+            checkFormValidity();
+          },
+          (error) => {
+            if (isManual) hideOverlay();
+            statusText.style.color = '#dc3545';
+            statusText.innerText = 'Gagal Pengesanan';
+            coordsText.innerText = '-';
+            accuracyText.innerText = '-';
+            showAlert("Sila benarkan kebenaran lokasi (GPS) pada peranti/pelayar anda.", "error");
+            checkFormValidity();
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+      } else {
+        if (isManual) hideOverlay();
+        statusText.style.color = '#dc3545';
+        statusText.innerText = 'GPS Tidak Disokong';
+        showAlert("Peranti anda tidak menyokong fungsi Geolocation.", "error");
       }
     }
 
-    function sendDataToServer(staffId, eventId) {
-      let payload = {
-        staffId: staffId,
-        eventId: eventId,
+    // 4. Semakan Kelayakan Butang Hantar
+    function checkFormValidity() {
+      const eventId = document.getElementById('eventId').value;
+      const submitBtn = document.getElementById('submitBtn');
+
+      if (isStaffValid && eventId && currentLat !== null && currentLng !== null) {
+        submitBtn.disabled = false;
+      } else {
+        submitBtn.disabled = true;
+      }
+    }
+
+    document.getElementById('eventId').addEventListener('change', checkFormValidity);
+
+    // 5. Penghantaran Borang Kehadiran
+    document.getElementById('attendanceForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      if (!isStaffValid || currentLat === null || currentLng === null) {
+        showAlert("Sila pastikan ID Staf sah dan lokasi GPS dikesan.", "error");
+        return;
+      }
+
+      const payload = {
+        staffId: document.getElementById('staffId').value.trim(),
+        eventId: document.getElementById('eventId').value,
         latitude: currentLat,
         longitude: currentLng,
         accuracy: currentAccuracy
       };
 
+      showOverlay("Mengesahkan Kehadiran...");
+      hideAlert();
+
       fetch(WEB_APP_URL, {
         method: 'POST',
         body: JSON.stringify(payload)
       })
-      .then(res => res.json())
-      .then(res => {
-        hideLoading();
-        if (res.success) {
-          showAlert('✅ Kehadiran Berjaya: ' + res.message, 'success');
-          document.getElementById('staffIdInput').value = '';
+      .then(response => response.json())
+      .then(result => {
+        hideOverlay();
+        if (result.success) {
+          showAlert(result.message, "success");
+          document.getElementById('attendanceForm').reset();
+          document.getElementById('staffFeedback').innerHTML = '';
+          isStaffValid = false;
+          checkFormValidity();
         } else {
-          showAlert('❌ ' + (res.status || 'Gagal') + ': ' + res.message, 'error');
+          showAlert(result.message || result.status, "error");
         }
       })
       .catch(err => {
-        hideLoading();
-        showAlert('Ralat sambungan: ' + err.message, 'error');
+        hideOverlay();
+        showAlert("Ralat rangkaian semasa mendaftar kehadiran. Sila cuba lagi.", "error");
+        console.error(err);
       });
+    });
+
+    // Fungsi Pembantu UI
+    function showOverlay(text) {
+      document.getElementById('loadingText').innerText = text;
+      document.getElementById('loadingOverlay').style.display = 'flex';
+    }
+
+    function hideOverlay() {
+      document.getElementById('loadingOverlay').style.display = 'none';
     }
 
     function showAlert(msg, type) {
-      let box = document.getElementById('alertBox');
-      box.style.display = 'block';
-      box.className = (type === 'success') ? 'alert-box alert-success' : 'alert-box alert-error';
-      box.innerText = msg;
+      const alertBox = document.getElementById('alertBox');
+      alertBox.innerText = msg;
+      alertBox.className = 'alert-box ' + (type === 'success' ? 'alert-success' : 'alert-error');
+      alertBox.style.display = 'block';
     }
+
+    function hideAlert() {
+      const alertBox = document.getElementById('alertBox');
+      alertBox.style.display = 'none';
+    }
+
+    // Jalankan semasa halaman mula dimuatkan
+    window.addEventListener('DOMContentLoaded', fetchInitialData);
   </script>
 </body>
 </html>
