@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Sistem Kehadiran Geofencing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{--forest:#14382F;--moss:#1F5A47;--gold:#F2B01E;--mist:#E7EEE9;--ink:#10211B;--coral:#C8442F;--leaf:#1E8A52;--line:#C9D6CE;
+--display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;--body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--mist);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;min-height:100vh}
+.app{max-width:440px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--mist)}
+
+/* Hero */
+.hero{background:var(--forest);color:#EAF3EE;padding:max(16px,env(safe-area-inset-top)) 20px 56px;border-radius:0 0 32px 32px;position:relative;overflow:hidden}
+.brand{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+.logo-img{height:36px;max-width:90px;object-fit:contain;display:none;background:#fff;border-radius:8px;padding:3px}
+.brand h1{font-family:var(--display);font-weight:600;font-size:15px;line-height:1.2}
+.radar{display:block;width:100%;max-width:300px;margin:8px auto 0;position:relative;z-index:1}
+.contours{pointer-events:none}
+#pin{transform:translate(150px,150px);transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+#pin circle{transition:fill .3s}
+#pulse{transform-origin:150px 150px;opacity:0}
+#pulse.go{animation:ring 1.2s ease-out 1}
+@keyframes ring{from{transform:scale(.2);opacity:.9}to{transform:scale(1.5);opacity:0}}
+.hd{font-family:var(--display);font-weight:800;font-size:28px;line-height:1.1;margin-top:12px;position:relative;z-index:1}
+.hs{color:#B9CFC5;margin-top:6px;max-width:34ch;position:relative;z-index:1}
+.locate{margin-top:16px;background:var(--gold);color:var(--ink);border:0;border-radius:999px;padding:0 22px;height:48px;font:700 15px var(--body);cursor:pointer;position:relative;z-index:1}
+.gpsline{margin-top:10px;font-size:13px;color:#8FB0A2;position:relative;z-index:1}
+
+/* Form */
+.form{background:#fff;margin:-32px 16px 0;border-radius:20px;padding:20px;border:1px solid var(--line);position:relative}
+.fg+.fg{margin-top:16px}
+label{display:block;font-weight:700;font-size:14px;margin-bottom:6px}
+.row{display:flex;gap:8px}
+input,select{width:100%;height:48px;padding:0 14px;border:2px solid var(--line);border-radius:10px;font:16px var(--body);background:#fff;color:var(--ink)}
+.btn-v{height:48px;padding:0 18px;border:2px solid var(--forest);background:#fff;color:var(--forest);border-radius:10px;font:700 15px var(--body);cursor:pointer}
+.info{display:none;margin-top:8px;padding:10px 14px;border-left:4px solid var(--leaf);background:#EAF6EF;border-radius:0 10px 10px 0}
+.info b{display:block;font-size:16px}
+.info span{font-size:13px;color:#3D5B4E}
+.alert{display:none;margin-top:16px;padding:12px 14px;border-left:4px solid;border-radius:0 10px 10px 0;font-weight:700;font-size:15px}
+.ok{background:#DDF3E5;color:#0F5132;border-color:var(--leaf)}
+.er{background:#FBE3DD;color:#8A2B1A;border-color:var(--coral)}
+
+/* Sticky action */
+.bar{position:sticky;bottom:0;margin-top:auto;padding:16px 16px max(16px,env(safe-area-inset-bottom));background:linear-gradient(to top,var(--mist) 70%,transparent)}
+.submit{width:100%;height:56px;border:0;border-radius:999px;background:var(--forest);color:#fff;font:700 17px var(--body);cursor:pointer}
+.submit:disabled{background:#7F938A}
+
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.form :focus-visible,.bar :focus-visible{outline-color:var(--moss)}
+.ov{display:none;position:fixed;inset:0;background:rgba(16,33,27,.78);z-index:9;justify-content:center;align-items:center;flex-direction:column;color:#fff;font-weight:700}
+.sp{border:4px solid rgba(255,255,255,.3);border-top-color:var(--gold);border-radius:50%;width:38px;height:38px;animation:s .8s linear infinite;margin-bottom:12px}
+@keyframes s{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="ov" class="ov" role="status"><div class="sp"></div><div id="ovt">Memproses...</div></div>
+
+<div class="app">
+  <header class="hero">
+    <div class="brand">
+      <img id="logo" class="logo-img" alt="Logo organisasi">
+      <h1 id="org">Sistem Kehadiran</h1>
+    </div>
+
+    <svg class="radar" viewBox="0 0 300 300" role="img" aria-label="Kedudukan anda berbanding kawasan acara">
+      <g class="contours" fill="none" stroke="#fff" stroke-opacity=".09" stroke-width="1.5">
+        <ellipse cx="150" cy="150" rx="146" ry="122" transform="rotate(-12 150 150)"/>
+        <ellipse cx="150" cy="150" rx="128" ry="108" transform="rotate(-8 150 150)"/>
+        <ellipse cx="150" cy="150" rx="112" ry="100" transform="rotate(-3 150 150)"/>
+        <ellipse cx="150" cy="150" rx="134" ry="132" transform="rotate(20 150 150)"/>
+      </g>
+      <circle id="pulse" cx="150" cy="150" r="90" fill="none" stroke="#F2B01E" stroke-width="3"/>
+      <circle cx="150" cy="150" r="90" fill="rgba(242,176,30,.13)" stroke="#F2B01E" stroke-width="3"/>
+      <circle cx="150" cy="150" r="6" fill="#F2B01E"/>
+      <text x="150" y="174" text-anchor="middle" font-size="12" font-weight="700" fill="#F2B01E">Acara</text>
+      <g id="pin" style="display:none"><circle r="17" fill="#fff" fill-opacity=".18"/><circle id="pinDot" r="9" fill="#7BE0A4" stroke="#14382F" stroke-width="2"/></g>
+    </svg>
+
+    <h2 id="hd" class="hd">Di mana anda sekarang?</h2>
+    <p id="hs" class="hs">Benarkan akses lokasi untuk melihat jarak anda ke acara.</p>
+    <button type="button" id="bl" class="locate">Cari lokasi saya</button>
+    <p class="gpsline" id="gd">GPS belum diperoleh</p>
+  </header>
+
+  <main class="form">
+    <div class="fg">
+      <label for="ev">Acara / program</label>
+      <select id="ev"><option value="">Memuatkan acara...</option></select>
+    </div>
+    <div class="fg">
+      <label for="sid">ID staf / no. kad</label>
+      <div class="row">
+        <input type="text" id="sid" placeholder="Contoh: MNHA" autocomplete="off" autocapitalize="characters" enterkeyhint="go">
+        <button type="button" id="bv" class="btn-v">Semak</button>
+      </div>
+      <div id="info" class="info"><b id="nm">-</b><span id="em">-</span></div>
+    </div>
+    <div id="al" class="alert" role="status" aria-live="polite"></div>
+  </main>
+
+  <div class="bar"><button type="button" id="sb" class="submit">Sahkan kehadiran</button></div>
+</div>
+
+<script>
+const URL_APP = "https://script.google.com/macros/s/AKfycbyuQEN5iLLrvHpdSHkPdaCgwX4_nf24bJGqNzB6pby9NJe_GSkAyL73-GZthoOIGV_Aqg/exec";
+const $ = id => document.getElementById(id);
+let pos = null;
+const deviceId = (() => {
+  try {
+    let d = localStorage.getItem('geo_attendance_device_id');
+    if (!d) { d = 'DEV-' + Math.random().toString(36).slice(2, 9).toUpperCase() + '-' + Date.now().toString(36).toUpperCase(); localStorage.setItem('geo_attendance_device_id', d); }
+    return d;
+  } catch (e) { return ''; }
+})();
+
+const post = body => fetch(URL_APP, { method: 'POST', body: JSON.stringify(body) }).then(r => r.json());
+const busy = t => { $('ovt').textContent = t || 'Memproses...'; $('ov').style.display = 'flex'; $('sb').disabled = true; };
+const idle = () => { $('ov').style.display = 'none'; $('sb').disabled = false; };
+function note(m, ok) { const a = $('al'); a.style.display = 'block'; a.className = 'alert ' + (ok ? 'ok' : 'er'); a.textContent = m; }
+function hero(h, s) { $('hd').textContent = h; $('hs').textContent = s; }
+
+fetch(URL_APP).then(r => r.json()).then(d => {
+  const c = d.config || {};
+  if (c.OrganizationName) $('org').textContent = c.OrganizationName;
+  if (c.LogoURL || c.Logo) { $('logo').src = c.LogoURL || c.Logo; $('logo').style.display = 'block'; }
+  $('ev').innerHTML = '<option value="">Pilih acara</option>';
+  (d.events || []).forEach(e => { const o = document.createElement('option'); o.value = e.eventId; o.textContent = e.eventName + ' (' + e.eventId + ')'; $('ev').appendChild(o); });
+}).catch(() => note('Senarai acara tidak dapat dimuatkan. Muat semula halaman.', false));
+
+function getLocation() {
+  return new Promise(res => {
+    if (!navigator.geolocation) { $('gd').textContent = 'Peranti ini tidak menyokong GPS'; return res(false); }
+    $('gd').textContent = 'Mencari lokasi...';
+    navigator.geolocation.getCurrentPosition(p => {
+      pos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy };
+      $('gd').textContent = 'Ketepatan GPS ±' + Math.round(pos.acc) + ' m';
+      const pl = $('pulse'); pl.classList.remove('go'); void pl.getBoundingClientRect(); pl.classList.add('go');
+      res(true);
+    }, () => {
+      $('gd').textContent = 'Akses lokasi ditolak';
+      hero('Lokasi tidak dapat dikesan', 'Hidupkan GPS dan benarkan akses lokasi untuk pelayar ini, kemudian cuba lagi.');
+      res(false);
+    }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+  });
+}
+
+// The server returns distance and radius only, never the venue coordinates.
+async function updateRadar() {
+  if (!pos) return;
+  const eventId = $('ev').value;
+  if (!eventId) return hero('Lokasi anda ditemui', 'Pilih acara untuk melihat jarak anda ke kawasan acara.');
+  try {
+    const r = await post({ action: 'preview', eventId, latitude: pos.lat, longitude: pos.lng });
+    if (!r.success) return hero('Jarak tidak dapat dikira', r.message);
+    const px = Math.min(r.distance / r.radius * 90, 135), a = -Math.PI / 4;
+    $('pin').style.display = 'block';
+    $('pin').style.transform = 'translate(' + (150 + px * Math.cos(a)) + 'px,' + (150 + px * Math.sin(a)) + 'px)';
+    $('pinDot').setAttribute('fill', r.inside ? '#7BE0A4' : '#FF8A72');
+    if (r.inside) hero('Anda berada ' + r.distance + ' m dari acara', 'Dalam kawasan. Anda boleh sahkan kehadiran.');
+    else hero('Anda berada ' + r.distance + ' m dari acara', 'Di luar kawasan. Dekati lokasi hingga dalam ' + r.radius + ' m.');
+  } catch (e) { hero('Jarak tidak dapat dikira', 'Semak sambungan internet anda.'); }
+}
+
+$('ev').onchange = updateRadar;
+$('bl').onclick = async () => { if (await getLocation()) updateRadar(); };
+
+async function verify() {
+  const staffId = $('sid').value.trim();
+  if (!staffId) return note('Masukkan ID staf dahulu.', false);
+  $('sid').blur(); busy('Menyemak ID staf...');
+  try {
+    const r = await post({ action: 'verifyStaff', staffId, deviceId });
+    if (r.success) { $('info').style.display = 'block'; $('nm').textContent = r.name; $('em').textContent = r.email || ''; $('al').style.display = 'none'; }
+    else { $('info').style.display = 'none'; note(r.message, false); }
+  } catch (e) { note('ID staf tidak dapat disemak: ' + e.message, false); }
+  idle();
+}
+$('bv').onclick = verify;
+$('sid').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); verify(); } };
+
+$('sb').onclick = async () => {
+  const eventId = $('ev').value, staffId = $('sid').value.trim();
+  if (!eventId) return note('Pilih acara dahulu.', false);
+  if (!staffId) return note('Masukkan ID staf anda.', false);
+  $('sid').blur(); busy('Mengesan lokasi dan mengesahkan...');
+  if (!(await getLocation())) { idle(); return note('Benarkan akses lokasi (GPS) pada telefon anda.', false); }
+  try {
+    const r = await post({ staffId, eventId, latitude: pos.lat, longitude: pos.lng, accuracy: pos.acc, deviceId });
+    if (r.success) { note(r.message, true); $('sid').value = ''; $('info').style.display = 'none'; }
+    else note((r.status || 'Gagal') + ': ' + r.message, false);
+    updateRadar();
+  } catch (e) { note('Sambungan gagal: ' + e.message, false); }
+  idle();
+};
+</script>
+</body>
+</html>
