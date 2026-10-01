@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistem Kehadiran Geofencing</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+body{background:#f8fafc;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:16px;color:#1e293b}
+.card{background:#fff;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.08);width:100%;max-width:400px;padding:24px;border:1px solid #e2e8f0}
+.header{text-align:center;margin-bottom:20px}
+.logo-img{max-height:75px;max-width:180px;margin:0 auto 12px;display:none;object-fit:contain}
+h1{font-size:20px;font-weight:700;color:#0f172a}
+.sub{font-size:12px;color:#64748b;margin-top:2px}
+.fg{margin-bottom:16px}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:#334155}
+.row{display:flex;gap:8px}
+input,select{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;background:#fff;color:#0f172a;outline:none}
+input:focus,select:focus{border-color:#2563eb}
+.btn-v{background:#0f172a;color:#fff;border:0;padding:0 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.info{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;font-size:12px;color:#1e40af;margin-top:8px;display:none}
+.radar{background:#0f172a;border-radius:12px;padding:12px;margin-bottom:16px;text-align:center;color:#e2e8f0}
+.radar svg{width:100%;max-width:220px;height:auto}
+.rtext{font-size:13px;font-weight:600;margin-top:4px}
+.rsub{font-size:11px;color:#94a3b8;margin-top:2px}
+.gps{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;color:#475569;margin-bottom:16px}
+.gr{display:flex;justify-content:space-between;align-items:center}
+.gr+.gr{margin-top:4px}
+.gb{color:#2563eb;font-weight:600;background:none;border:0;text-decoration:underline;cursor:pointer;font-size:11px}
+.alert{padding:12px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:16px;display:none}
+.ok{background:#d1fae5;color:#065f46;border:1px solid #a7f3d0}
+.er{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+.submit{width:100%;background:#059669;color:#fff;border:0;padding:14px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer}
+.submit:disabled{background:#94a3b8}
+.ov{display:none;position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:9;justify-content:center;align-items:center;flex-direction:column;color:#fff}
+.sp{border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;width:36px;height:36px;animation:s .8s linear infinite;margin-bottom:12px}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="ov" class="ov"><div class="sp"></div><div id="ovt" style="font-size:14px;font-weight:600">Memproses...</div></div>
+<div class="card">
+  <div class="header">
+    <img id="logo" class="logo-img" alt="Logo">
+    <h1 id="org">Sistem Kehadiran</h1>
+    <p class="sub">Pengesahan Geofencing GPS</p>
+  </div>
+
+  <div class="fg">
+    <label for="ev">Pilih Acara / Program</label>
+    <select id="ev"><option value="">-- Memuatkan Acara... --</option></select>
+  </div>
+
+  <div class="fg">
+    <label for="sid">ID Staf / No. Kad</label>
+    <div class="row">
+      <input type="text" id="sid" placeholder="Contoh: MNHA" autocomplete="off">
+      <button type="button" id="bv" class="btn-v">Semak</button>
+    </div>
+    <div id="info" class="info"><b id="nm">-</b><div id="em" style="font-size:11px;opacity:.85">-</div></div>
+  </div>
+
+  <div class="radar">
+    <svg viewBox="0 0 220 220" aria-label="Radar jarak ke lokasi acara">
+      <circle id="fence" cx="110" cy="110" r="70" fill="rgba(148,163,184,.15)" stroke="#94a3b8" stroke-width="2" stroke-dasharray="5 4"/>
+      <circle cx="110" cy="110" r="4" fill="#38bdf8"/>
+      <text x="110" y="100" text-anchor="middle" font-size="9" fill="#38bdf8">ACARA</text>
+      <circle id="dot" cx="110" cy="110" r="7" fill="#64748b" style="display:none"/>
+    </svg>
+    <div id="rt" class="rtext">Pilih acara &amp; cari lokasi</div>
+    <div id="rs" class="rsub">Jarak ditunjukkan secara relatif (arah tidak dipaparkan)</div>
+  </div>
+
+  <div class="gps">
+    <div class="gr"><span>Status GPS:</span><b id="gs" style="color:#64748b">Belum Diperoleh</b></div>
+    <div class="gr"><span id="gd" style="font-size:11px;color:#94a3b8">Lat: - | Lng: -</span><button type="button" id="bl" class="gb">Cari Lokasi</button></div>
+  </div>
+
+  <div id="al" class="alert"></div>
+  <button type="button" id="sb" class="submit">Sahkan Kehadiran</button>
+</div>
+
+<script>
+const URL_APP = "https://script.google.com/macros/s/AKfycbyuQEN5iLLrvHpdSHkPdaCgwX4_nf24bJGqNzB6pby9NJe_GSkAyL73-GZthoOIGV_Aqg/exec";
+const $ = id => document.getElementById(id);
+let pos = null;
+const deviceId = (() => {
+  try {
+    let d = localStorage.getItem('geo_attendance_device_id');
+    if (!d) { d = 'DEV-' + Math.random().toString(36).slice(2, 9).toUpperCase() + '-' + Date.now().toString(36).toUpperCase(); localStorage.setItem('geo_attendance_device_id', d); }
+    return d;
+  } catch (e) { return ''; }
+})();
+
+const post = body => fetch(URL_APP, { method: 'POST', body: JSON.stringify(body) }).then(r => r.json());
+const busy = t => { $('ovt').textContent = t || 'Memproses...'; $('ov').style.display = 'flex'; $('sb').disabled = true; };
+const idle = () => { $('ov').style.display = 'none'; $('sb').disabled = false; };
+function alertMsg(m, ok) { const a = $('al'); a.style.display = 'block'; a.className = 'alert ' + (ok ? 'ok' : 'er'); a.textContent = m; }
+
+fetch(URL_APP).then(r => r.json()).then(d => {
+  const c = d.config || {};
+  if (c.OrganizationName) $('org').textContent = c.OrganizationName;
+  if (c.LogoURL || c.Logo) { $('logo').src = c.LogoURL || c.Logo; $('logo').style.display = 'block'; }
+  $('ev').innerHTML = '<option value="">-- Pilih Acara --</option>';
+  (d.events || []).forEach(e => { const o = document.createElement('option'); o.value = e.eventId; o.textContent = e.eventName + ' (' + e.eventId + ')'; $('ev').appendChild(o); });
+}).catch(() => alertMsg('Gagal memuatkan data acara', false));
+
+function getLocation(toast) {
+  return new Promise(res => {
+    if (!navigator.geolocation) { gps('GPS Tidak Disokong', '#dc2626', '-'); return res(false); }
+    gps('Mendapatkan Lokasi...', '#d97706', 'Sila tunggu...');
+    navigator.geolocation.getCurrentPosition(p => {
+      pos = { lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy };
+      gps('Lokasi Sah (±' + Math.round(pos.acc) + 'm)', '#059669', 'Lat: ' + pos.lat.toFixed(5) + ' | Lng: ' + pos.lng.toFixed(5));
+      if (toast) alertMsg('Lokasi GPS berjaya diperolehi', true);
+      res(true);
+    }, () => {
+      gps('Gagal Mengesan GPS', '#dc2626', 'Sila benarkan akses lokasi');
+      if (toast) alertMsg('Gagal mendapatkan lokasi GPS. Sila benarkan akses lokasi.', false);
+      res(false);
+    }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+  });
+}
+function gps(s, c, d) { $('gs').textContent = s; $('gs').style.color = c; $('gd').textContent = d; }
+
+// Live radar: server returns distance + radius only, never the venue coordinates
+async function updateRadar() {
+  const eventId = $('ev').value;
+  if (!eventId || !pos) return;
+  try {
+    const r = await post({ action: 'preview', eventId, latitude: pos.lat, longitude: pos.lng });
+    if (!r.success) { $('rt').textContent = r.message; return; }
+    const R = 70, dist = Math.min(r.distance / r.radius * R, 100);
+    const ang = -Math.PI / 4, dot = $('dot');
+    dot.setAttribute('cx', 110 + dist * Math.cos(ang));
+    dot.setAttribute('cy', 110 + dist * Math.sin(ang));
+    dot.setAttribute('fill', r.inside ? '#22c55e' : '#ef4444');
+    dot.style.display = 'block';
+    $('rt').textContent = r.inside ? 'Dalam kawasan (' + r.distance + 'm / ' + r.radius + 'm)' : 'Di luar kawasan: ' + r.distance + 'm (maks ' + r.radius + 'm)';
+  } catch (e) { $('rt').textContent = 'Tidak dapat mengira jarak'; }
+}
+
+$('ev').onchange = updateRadar;
+$('bl').onclick = async () => { if (await getLocation(true)) updateRadar(); };
+
+async function verify() {
+  const staffId = $('sid').value.trim();
+  if (!staffId) return alertMsg('Sila masukkan ID Staf terlebih dahulu', false);
+  $('sid').blur(); busy('Menyemak ID Staf...');
+  try {
+    const r = await post({ action: 'verifyStaff', staffId, deviceId });
+    if (r.success) { $('info').style.display = 'block'; $('nm').textContent = 'Nama: ' + r.name; $('em').textContent = 'E-mel: ' + (r.email || '-'); alertMsg('ID Staf Sah: ' + r.name, true); }
+    else { $('info').style.display = 'none'; alertMsg(r.message, false); }
+  } catch (e) { alertMsg('Ralat semasa menyemak ID: ' + e.message, false); }
+  idle();
+}
+$('bv').onclick = verify;
+$('sid').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); verify(); } };
+
+$('sb').onclick = async () => {
+  const eventId = $('ev').value, staffId = $('sid').value.trim();
+  if (!eventId) return alertMsg('Sila pilih Acara / Program terlebih dahulu', false);
+  if (!staffId) return alertMsg('Sila masukkan ID Staf anda', false);
+  $('sid').blur(); busy('Mengesan Lokasi & Pengesahan...');
+  if (!(await getLocation(false))) { idle(); return alertMsg('Sila benarkan akses lokasi (GPS) pada telefon anda.', false); }
+  try {
+    const r = await post({ staffId, eventId, latitude: pos.lat, longitude: pos.lng, accuracy: pos.acc, deviceId });
+    if (r.success) { alertMsg('Kehadiran Berjaya: ' + r.message, true); $('sid').value = ''; $('info').style.display = 'none'; }
+    else alertMsg((r.status || 'Gagal') + ': ' + r.message, false);
+    updateRadar();
+  } catch (e) { alertMsg('Ralat sambungan: ' + e.message, false); }
+  idle();
+};
+</script>
+</body>
+</html>
