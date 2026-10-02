@@ -10,6 +10,7 @@ function doPost(e) {
     var c = JSON.parse(e.postData.contents);
     if (c.action === 'verifyStaff') return json_(verifyStaff(c));
     if (c.action === 'preview') return json_(previewDistance(c));
+    if (c.action === 'adminReport') return json_(adminReport(c));
     return json_(processAttendance(c));
   } catch (err) {
     return json_({ success: false, status: 'Ralat Server', message: err.toString() });
@@ -32,7 +33,9 @@ function same_(a, b) {
 // ---------- Initial data ----------
 function getInitialData() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  return { config: getConfigData(ss, false), events: getActiveEvents(ss) };
+  var all = getConfigData(ss, false), pub = {};
+  ['OrganizationName', 'Logo', 'LogoURL'].forEach(function (k) { if (all[k] !== undefined) pub[k] = all[k]; });
+  return { config: pub, events: getActiveEvents(ss) };
 }
 
 function getConfigData(ss, skipLogo) {
@@ -203,4 +206,131 @@ function getDistance(lat1, lon1, lat2, lon2) {
   var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
           Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ================= Admin report (PIN protected, no coordinates returned) =================
+// Config tab: add a row  AdminPIN | <your passphrase>
+
+function checkPin_(pin) {
+  var cache = CacheService.getScriptCache();
+  var fails = parseInt(cache.get('adm_fails') || '0', 10);
+  if (fails >= 5) return { ok: false, message: 'Terlalu banyak percubaan gagal. Cuba lagi dalam 10 minit.' };
+  var cfg = getConfigData(SpreadsheetApp.getActiveSpreadsheet(), true);
+  var real = (cfg['AdminPIN'] === undefined || cfg['AdminPIN'] === '') ? '' : cfg['AdminPIN'].toString().trim();
+  if (!real) return { ok: false, message: 'Admin belum diaktifkan. Tambah baris AdminPIN dalam tab Config.' };
+  if ((pin || '').toString().trim() !== real) {
+    cache.put('adm_fails', String(fails + 1), 600);
+    return { ok: false, message: 'PIN salah.' };
+  }
+  cache.remove('adm_fails');
+  return { ok: true };
+}
+
+function adminReport(p) {
+  var auth = checkPin_(p.pin);
+  if (!auth.ok) return { success: false, status: 'Akses Ditolak', message: auth.message };
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = Session.getScriptTimeZone();
+  var today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+
+  var events = [], evSheet = ss.getSheetByName('Events');
+  if (evSheet) {
+    var ev = evSheet.getDataRange().getValues();
+    for (var i = 1; i < ev.length; i++) {
+      if (ev[i][0]) events.push({ eventId: ev[i][0].toString().trim(), eventName: ev[i][1], active: isYes_(ev[i][5]) });
+    }
+  }
+  var eventId = (p.eventId || '').toString().trim();
+  if (!eventId) return { success: true, today: today, events: events };
+
+  var dateStr = /^\d{4}-\d{2}-\d{2}$/.test(p.date || '') ? p.date : today;
+  var start = Utilities.parseDate(dateStr, tz, 'yyyy-MM-dd');
+  var end = new Date(start.getTime() + 86400000);
+
+  var staff = [], names = {}, sSheet = ss.getSheetByName('Staff');
+  if (sSheet) {
+    var sd = sSheet.getDataRange().getValues();
+    for (var a = 1; a < sd.length; a++) {
+      if (sd[a][0] && isYes_(sd[a][3])) {
+        var id = sd[a][0].toString().trim();
+        staff.push({ id: id, name: sd[a][1] || id });
+        names[id.toUpperCase()] = sd[a][1] || id;
+      }
+    }
+  }
+
+  var present = {}, rejected = [], rec = ss.getSheetByName('Records');
+  var rows = rec ? rec.getDataRange().getValues() : [];
+  for (var k = 1; k < rows.length; k++) {
+    var r = rows[k];
+    if (!r[4] || !same_(r[4], eventId) || !r[1]) continue;
+    var t = new Date(r[0]);
+    if (isNaN(t.getTime()) || t < start || t >= end) continue;
+    var st = (r[9] || '').toString().toUpperCase();
+    var sid = r[1].toString().trim().toUpperCase();
+    var dist = Math.round(parseFloat(r[8]));
+    var nm = names[sid] || r[2] || sid;
+    if (st === 'BERJAYA' || st === 'HADIR') {
+      if (!present[sid] || t < present[sid].t) present[sid] = { t: t, id: r[1].toString().trim(), name: nm, distance: dist };
+    } else if (st === 'DITOLAK') {
+      rejected.push({ t: t, time: Utilities.formatDate(t, tz, 'HH:mm:ss'), staffId: r[1].toString().trim(), name: nm, distance: dist, remarks: r[10] || '' });
+    }
+  }
+
+  var attended = Object.keys(present).map(function (key) { return present[key]; })
+    .sort(function (x, y) { return x.t - y.t; })
+    .map(function (x) { return { time: Utilities.formatDate(x.t, tz, 'HH:mm:ss'), staffId: x.id, name: x.name, distance: x.distance }; });
+  var absent = staff.filter(function (s) { return !present[s.id.toUpperCase()]; })
+    .map(function (s) { return { staffId: s.id, name: s.name }; });
+  rejected.sort(function (x, y) { return y.t - x.t; });
+  rejected.forEach(function (x) { delete x.t; });
+
+  return { success: true, today: today, date: dateStr, events: events, eventId: eventId,
+           totalStaff: staff.length, attended: attended, absent: absent, rejected: rejected };
+}
+
+// ================= Summary sheet (formula based, rebuilds itself) =================
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('Kehadiran').addItem('Sediakan helaian Summary', 'setupSummary').addToUi();
+}
+
+function setupSummary() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var events = ss.getSheetByName('Events');
+  var sh = ss.getSheetByName('Summary') || ss.insertSheet('Summary');
+  sh.clear();
+  sh.clearConditionalFormatRules();
+
+  sh.getRange('A1:A6').setValues([['Acara (EventID)'], ['Nama acara'], ['Tarikh'], ['Hadir'], ['Belum hadir'], ['Jumlah staf aktif']]).setFontWeight('bold');
+  sh.getRange('B1').setValue(events.getRange('A2').getValue())
+    .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(events.getRange('A2:A200'), true).build())
+    .setBackground('#FFF4D6');
+  sh.getRange('B2').setFormula('=IFERROR(VLOOKUP($B$1,Events!A:B,2,FALSE),"")');
+  sh.getRange('B3').setFormula('=TODAY()').setNumberFormat('dd/mm/yyyy').setBackground('#FFF4D6').setHorizontalAlignment('left');
+  sh.getRange('B4').setFormula('=COUNTIF(C8:C,"Hadir")');
+  sh.getRange('B5').setFormula('=COUNTIF(C8:C,"Tidak hadir")');
+  sh.getRange('B6').setFormula('=B4+B5');
+  sh.getRange('B4:B6').setHorizontalAlignment('left');
+
+  sh.getRange('A7:D7').setValues([['ID Staf', 'Nama', 'Status', 'Masa daftar']]).setFontWeight('bold').setBackground('#14382F').setFontColor('#FFFFFF');
+  sh.getRange('A8').setFormula('=IFERROR(FILTER(Staff!A2:B,Staff!A2:A<>"",Staff!D2:D<>"NO"),"")');
+
+  var crit = 'Records!$B:$B,$A{r},Records!$E:$E,$B$1,Records!$J:$J,"BERJAYA",Records!$A:$A,">="&$B$3,Records!$A:$A,"<"&($B$3+1)';
+  var f = [];
+  for (var r = 8; r <= 207; r++) {
+    var c = crit.replace(/\{r\}/g, r);
+    f.push(['=IF($A' + r + '="","",IF(COUNTIFS(' + c + ')>0,"Hadir","Tidak hadir"))',
+            '=IF($C' + r + '="Hadir",MINIFS(Records!$A:$A,' + c + '),"")']);
+  }
+  sh.getRange('C8:D207').setFormulas(f);
+  sh.getRange('D8:D207').setNumberFormat('HH:mm:ss');
+
+  sh.setConditionalFormatRules([
+    SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Hadir').setBackground('#DDF3E5').setRanges([sh.getRange('C8:C207')]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('Tidak hadir').setBackground('#FBE3DD').setRanges([sh.getRange('C8:C207')]).build()
+  ]);
+  sh.setFrozenRows(7);
+  sh.setColumnWidth(1, 150); sh.setColumnWidth(2, 340); sh.setColumnWidth(3, 110); sh.setColumnWidth(4, 110);
+  ss.setActiveSheet(sh);
 }
