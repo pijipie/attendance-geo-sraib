@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin Kehadiran</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{--forest:#14382F;--moss:#1F5A47;--gold:#F2B01E;--mist:#E7EEE9;--ink:#10211B;--coral:#C8442F;--leaf:#1E8A52;--line:#C9D6CE;
+--display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;--body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--mist);color:var(--ink);font:16px/1.45 var(--body);min-height:100vh}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px 32px}
+header{background:var(--forest);color:#EAF3EE;padding:max(14px,env(safe-area-inset-top)) 16px 18px}
+header .wrap{padding:0;display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font:800 20px var(--display)}
+.link{background:none;border:0;color:var(--gold);font:700 14px var(--body);cursor:pointer;text-decoration:underline;min-height:44px}
+input,select{width:100%;height:48px;padding:0 14px;border:2px solid var(--line);border-radius:10px;font:16px var(--body);background:#fff;color:var(--ink)}
+button.pri{height:48px;padding:0 22px;border:0;border-radius:999px;background:var(--forest);color:#fff;font:700 16px var(--body);cursor:pointer}
+button.sec{height:44px;padding:0 16px;border:2px solid var(--forest);border-radius:999px;background:#fff;color:var(--forest);font:700 14px var(--body);cursor:pointer}
+label{display:block;font-weight:700;font-size:14px;margin-bottom:6px}
+.msg{display:none;margin-top:14px;padding:12px 14px;border-left:4px solid var(--coral);background:#FBE3DD;color:#8A2B1A;border-radius:0 10px 10px 0;font-weight:700}
+
+#login{max-width:380px;margin:48px auto 0;background:#fff;border:1px solid var(--line);border-radius:20px;padding:24px}
+#login p{color:#4A6458;margin:6px 0 16px}
+#login button{width:100%;margin-top:14px}
+#dash{display:none}
+.filters{display:grid;grid-template-columns:1fr 170px;gap:12px;margin:18px 0 12px}
+.score{background:#fff;border:1px solid var(--line);border-radius:20px;padding:18px 20px}
+.score .big{font:800 34px/1.1 var(--display)}
+.score .of{color:#4A6458;font-size:15px;margin-top:2px}
+.bar{height:10px;background:#E1EAE4;border-radius:99px;margin-top:12px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--leaf);width:0;transition:width .5s}
+.tools{display:flex;gap:8px;align-items:center;margin:16px 0 10px;flex-wrap:wrap}
+.tab{height:44px;padding:0 16px;border:2px solid var(--line);border-radius:999px;background:#fff;font:700 14px var(--body);cursor:pointer;color:var(--ink)}
+.tab[aria-selected="true"]{background:var(--forest);border-color:var(--forest);color:#fff}
+.search{margin-bottom:10px}
+.list{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.item{display:flex;gap:12px;align-items:baseline;padding:12px 16px;border-bottom:1px solid #E4ECE7}
+.item:last-child{border-bottom:0}
+.item .t{font-variant-numeric:tabular-nums;color:#4A6458;min-width:64px;font-size:14px}
+.item .id{font-weight:700;min-width:56px}
+.item .n{flex:1}
+.item .d{color:#4A6458;font-size:13px;white-space:nowrap}
+.empty{padding:28px 16px;text-align:center;color:#4A6458}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;font-size:13px;color:#4A6458;flex-wrap:wrap}
+.foot label{display:inline-flex;align-items:center;gap:8px;margin:0;font-weight:400}
+.foot input{width:20px;height:20px}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+header :focus-visible{outline-color:#fff}
+@media (max-width:480px){.filters{grid-template-columns:1fr}.item{flex-wrap:wrap;gap:4px 12px}.item .n{flex-basis:100%;order:3}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><h1 id="org">Admin kehadiran</h1><button class="link" id="out" style="display:none">Log keluar</button></div></header>
+
+<div class="wrap">
+  <section id="login">
+    <h2 style="font:800 22px var(--display)">Masuk admin</h2>
+    <p>Masukkan PIN admin. Data kehadiran hanya dipaparkan selepas PIN disahkan.</p>
+    <label for="pin">PIN admin</label>
+    <input type="password" id="pin" autocomplete="current-password" enterkeyhint="go">
+    <button class="pri" id="go">Masuk</button>
+    <div id="lerr" class="msg" role="alert"></div>
+  </section>
+
+  <section id="dash">
+    <div class="filters">
+      <div><label for="ev">Acara</label><select id="ev"></select></div>
+      <div><label for="dt">Tarikh</label><input type="date" id="dt"></div>
+    </div>
+
+    <div class="score" aria-live="polite">
+      <div class="big" id="big">-</div>
+      <div class="of" id="of">Pilih acara untuk melihat kehadiran</div>
+      <div class="bar"><i id="fill"></i></div>
+    </div>
+
+    <div class="tools" role="tablist">
+      <button class="tab" role="tab" data-tab="attended" aria-selected="true">Hadir <span id="c1"></span></button>
+      <button class="tab" role="tab" data-tab="absent" aria-selected="false">Belum hadir <span id="c2"></span></button>
+      <button class="tab" role="tab" data-tab="rejected" aria-selected="false">Ditolak <span id="c3"></span></button>
+    </div>
+    <input class="search" type="search" id="q" placeholder="Cari nama atau ID staf" aria-label="Cari nama atau ID staf">
+    <div class="list" id="list"><div class="empty">Tiada data lagi.</div></div>
+
+    <div class="foot">
+      <label><input type="checkbox" id="auto" checked> Muat semula setiap 30 saat</label>
+      <span id="upd"></span>
+      <button class="sec" id="csv">Muat turun CSV</button>
+    </div>
+    <div id="derr" class="msg" role="alert"></div>
+  </section>
+</div>
+
+<script>
+const URL_APP = "https://script.google.com/macros/s/AKfycbyuQEN5iLLrvHpdSHkPdaCgwX4_nf24bJGqNzB6pby9NJe_GSkAyL73-GZthoOIGV_Aqg/exec";
+const $ = id => document.getElementById(id);
+let pin = '', tab = 'attended', data = null, timer = null, seq = 0;
+
+const post = b => fetch(URL_APP, { method: 'POST', body: JSON.stringify(b) }).then(r => r.json());
+function show(id, text) { const e = $(id); e.textContent = text; e.style.display = text ? 'block' : 'none'; }
+
+async function login(p) {
+  show('lerr', '');
+  try {
+    const r = await post({ action: 'adminReport', pin: p });
+    if (!r.success) { show('lerr', r.message); return false; }
+    pin = p; sessionStorage.setItem('adm_pin', p);
+    $('login').style.display = 'none'; $('dash').style.display = 'block'; $('out').style.display = 'block';
+    $('dt').value = r.today;
+    $('ev').innerHTML = '<option value="">Pilih acara</option>';
+    r.events.forEach(e => { const o = document.createElement('option'); o.value = e.eventId; o.textContent = e.eventName + ' (' + e.eventId + ')' + (e.active ? '' : ' - ditutup'); $('ev').appendChild(o); });
+    startTimer();
+    return true;
+  } catch (e) { show('lerr', 'Sambungan gagal. Semak internet anda.'); return false; }
+}
+
+function logout() {
+  sessionStorage.removeItem('adm_pin'); pin = ''; data = null; clearInterval(timer);
+  $('dash').style.display = 'none'; $('out').style.display = 'none'; $('login').style.display = 'block'; $('pin').value = '';
+}
+
+async function load() {
+  const eventId = $('ev').value;
+  if (!eventId) return;
+  const my = ++seq;
+  try {
+    const r = await post({ action: 'adminReport', pin, eventId, date: $('dt').value });
+    if (my !== seq) return;
+    if (!r.success) { if (r.status === 'Akses Ditolak') { logout(); show('lerr', r.message); } else show('derr', r.message); return; }
+    show('derr', ''); data = r; render();
+    $('upd').textContent = 'Dikemas kini ' + new Date().toLocaleTimeString('ms-MY');
+  } catch (e) { show('derr', 'Data tidak dapat dimuatkan. Semak sambungan internet.'); }
+}
+
+function startTimer() { clearInterval(timer); timer = setInterval(() => { if ($('auto').checked && !document.hidden) load(); }, 30000); }
+
+function rowsFor(t) { return data ? data[t] : []; }
+
+function render() {
+  const a = data.attended.length, b = data.absent.length, c = data.rejected.length;
+  $('big').textContent = a + ' hadir';
+  $('of').textContent = 'daripada ' + data.totalStaff + ' staf aktif, ' + b + ' belum hadir';
+  $('fill').style.width = (data.totalStaff ? Math.min(100, a / data.totalStaff * 100) : 0) + '%';
+  $('c1').textContent = '(' + a + ')'; $('c2').textContent = '(' + b + ')'; $('c3').textContent = '(' + c + ')';
+  const q = $('q').value.trim().toLowerCase();
+  const rows = rowsFor(tab).filter(x => !q || (x.name + ' ' + x.staffId).toLowerCase().includes(q));
+  const list = $('list'); list.replaceChildren();
+  if (!rows.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = q ? 'Tiada padanan.' : ({ attended: 'Belum ada yang hadir.', absent: 'Semua staf telah hadir.', rejected: 'Tiada percubaan ditolak.' })[tab]; list.appendChild(e); return; }
+  rows.forEach(x => {
+    const d = document.createElement('div'); d.className = 'item';
+    const add = (cls, txt) => { const s = document.createElement('span'); s.className = cls; s.textContent = txt; d.appendChild(s); };
+    if (tab !== 'absent') add('t', x.time);
+    add('id', x.staffId); add('n', x.name);
+    if (tab === 'attended') add('d', x.distance + ' m');
+    if (tab === 'rejected') add('d', x.distance + ' m, ' + x.remarks);
+    list.appendChild(d);
+  });
+}
+
+function csvCell(v) { v = String(v == null ? '' : v); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; }
+function downloadCsv() {
+  if (!data) return;
+  const cols = tab === 'absent' ? ['staffId', 'name'] : tab === 'attended' ? ['time', 'staffId', 'name', 'distance'] : ['time', 'staffId', 'name', 'distance', 'remarks'];
+  const lines = [cols.join(',')].concat(rowsFor(tab).map(r => cols.map(c => csvCell(r[c])).join(',')));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = data.eventId + '_' + data.date + '_' + tab + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+$('go').onclick = () => login($('pin').value.trim());
+$('pin').onkeydown = e => { if (e.key === 'Enter') $('go').click(); };
+$('out').onclick = logout;
+$('ev').onchange = load; $('dt').onchange = load; $('q').oninput = () => data && render();
+$('csv').onclick = downloadCsv;
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === b));
+  if (data) render();
+});
+
+fetch(URL_APP).then(r => r.json()).then(d => { const c = d.config || {}; if (c.OrganizationName) $('org').textContent = 'Admin: ' + c.OrganizationName; }).catch(() => {});
+const saved = sessionStorage.getItem('adm_pin');
+if (saved) login(saved);
+</script>
+</body>
+</html>
