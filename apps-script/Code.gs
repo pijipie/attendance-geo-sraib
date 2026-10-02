@@ -161,7 +161,8 @@ function processAttendance(p) {
 
     var pd = (config['PreventDuplicate'] || '').toString().trim().toUpperCase();
     var preventDup = ['YES', 'ON', 'TRUE', '1'].indexOf(pd) >= 0;
-    var dupMin = parseFloat(config['Duplicate Minute'] || config['DuplicateMinute']) || 5;
+    var dupRaw = config['Duplicate Minutes'] || config['DuplicateMinutes'] || config['Duplicate Minute'] || config['DuplicateMinute'];
+    var dupMin = parseFloat(dupRaw) || 5;
     var rows = records.getDataRange().getValues();
     var now = new Date();
 
