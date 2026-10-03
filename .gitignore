@@ -1,0 +1,15 @@
+# Personal data and exports must never be committed (public repo)
+*.csv
+*.xlsx
+*.xls
+*.zip
+
+# Secrets
+.env
+.env.*
+
+# OS / editor clutter
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
